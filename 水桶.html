@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>圓柱體水塔體積與重量計算器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f9;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .left-panel, .right-panel {
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #ffffff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .left-panel {
+            flex: 1; 
+            max-width: 300px;
+        }
+        .right-panel {
+            flex: 3; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="number"] {
+            width: 90%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #results-panel {
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #e9ecef;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        .unit-selector {
+            margin-top: 15px;
+        }
+        /* 確保 LaTeX 公式能正確顯示 */
+        #volumeCalculationSteps .mjx-container {
+            margin: 5px 0;
+            display: block; /* 讓公式獨立成行 */
+            text-align: left;
+            font-size: 1.1em;
+        }
+        #volumeCalculationSteps h4 {
+            margin-top: 0;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>💧 圓柱體水塔體積與重量計算器</h1>
+    <div class="container">
+        <div class="left-panel">
+            <h2>參數輸入 (單位: cm)</h2>
+            <div class="input-group">
+                <label for="outerDiameter">外徑 (D):</label>
+                <input type="number" id="outerDiameter" value="128" min="1" required>
+            </div>
+            <div class="input-group">
+                <label for="thickness">水塔厚度 (t):</label>
+                <input type="number" id="thickness" value="0.6" min="0" required>
+            </div>
+            <div class="input-group">
+                <label for="length">水塔長度 (L):</label>
+                <input type="number" id="length" value="220" min="1" required>
+            </div>
+            <div class="input-group">
+                <label for="waterHeight">水位高度 (h):</label>
+                <input type="number" id="waterHeight" value="98" min="0" required>
+            </div>
+            <button onclick="calculateAndDraw()">計算與繪製</button>
+        </div>
+
+        <div class="right-panel">
+            <canvas id="tankCanvas" width="650" height="350"></canvas>
+        </div>
+    </div>
+
+    <div id="results-panel">
+        <h2>📊 體積與重量計算過程</h2>
+        <div id="volumeCalculationSteps">請輸入參數並點擊計算按鈕。</div>
+        
+        <div class="unit-selector">
+            <label for="volumeUnit">體積單位：</label>
+            <select id="volumeUnit" onchange="updateResults()">
+                <option value="cm3">立方公分 (cm³)</option>
+                <option value="m3">立方公尺 (m³)</option>
+                <option value="L">公升 (L)</option>
+                <option value="kL">公秉 (kL)</option>
+            </select>
+            <p><strong>水體積 (V)：</strong> <span id="displayVolume">0</span></p>
+        </div>
+        
+        <hr>
+
+        <div class="unit-selector">
+            <label for="weightUnit">重量單位：</label>
+            <select id="weightUnit" onchange="updateResults()">
+                <option value="g">公克 (g)</option>
+                <option value="kg">公斤 (kg)</option>
+                <option value="t">公噸 (t)</option>
+            </select>
+            <p style="margin-top: 5px; font-size: 0.9em;">*假設水的密度約為 $1 \text{ g/cm}^3$。</p>
+            <p><strong>水重量 (W)：</strong> <span id="displayWeight">0</span></p>
+        </div>
+    </div>
+
+    <script>
+        // 全域變數用於儲存計算結果 (以 cm³ 為基準)
+        let calculatedVolumeCm3 = 0;
+        
+        /**
+         * 計算橫放圓柱體內特定高度水的體積。
+         */
+        function calculateWaterVolume(R, h, L) {
+            if (h < 0 || R <= 0 || L <= 0) return { volume: 0, steps: "輸入參數無效或水位為零。" };
+            h = Math.min(h, 2 * R); 
+            let volume = 0;
+            let steps = "";
+            const PI = Math.PI;
+
+            if (h === 0) {
+                volume = 0;
+                steps = `<h4>計算結果:</h4><p>水位高度 $h = 0$，體積 $V = 0 \text{ cm³}$。</p>`;
+            } else {
+                
+                let area = 0;
+                let area_fixed = 0;
+                let volume_fixed = 0;
+                const R_fixed = R.toFixed(2);
+                const h_fixed = h.toFixed(2);
+                const L_fixed = L.toFixed(2);
+                
+                if (h === 2 * R) {
+                    // 滿水狀態
+                    area = PI * R * R;
+                    volume = area * L;
+                    area_fixed = area.toFixed(2);
+                    volume_fixed = volume.toFixed(2);
+                    
+                    steps = `
+                    <div style="background-color: #e6ffe6; padding: 10px; border: 1px solid #c0ffc0; border-radius: 5px;">
+                        <h4>滿水狀態 ($h=D'$):</h4>
+                        <p>1. 圓形截面積 $A = \pi \cdot R^2 = \pi \cdot ${R_fixed}^2 \approx ${area_fixed} \text{ cm}^2$</p>
+                        <p>2. 體積 $V = A \cdot L = ${area_fixed} \cdot ${L_fixed} \approx ${volume_fixed} \text{ cm³}$</p>
+                    </div>`;
+
+                } else {
+                    // 弓形體積計算
+                    const discriminant = 2 * R * h - h * h;
+                    
+                    if (discriminant >= 0) {
+                        area = R * R * Math.acos((R - h) / R) - (R - h) * Math.sqrt(discriminant);
+                        volume = area * L;
+                        area_fixed = area.toFixed(2);
+                        volume_fixed = volume.toFixed(2);
+                    } 
+                    
+                    steps = `
+                    <div style="background-color: #f0f8ff; padding: 10px; border: 1px solid #d0e8ff; border-radius: 5px;">
+                        <h4>步驟一：計算弓形截面積 ($A$)</h4>
+                        <p>弓形面積公式 (適用橫放圓柱體):</p>
+                        $$A = R^2 \\cdot \\arccos \\left(\\frac{R-h}{R}\\right) - (R-h) \\cdot \\sqrt{2Rh - h^2}$$
+                        <p><strong>代入數值:</strong></p>
+                        <p>$$A = ${R_fixed}^2 \\cdot \\arccos \\left(\\frac{${R_fixed}-${h_fixed}}{${R_fixed}}\\right) - (${R_fixed}-${h_fixed}) \\cdot \\sqrt{2\\cdot${R_fixed}\\cdot${h_fixed} - ${h_fixed}^2}$$</p>
+                        <p>$$\\Rightarrow A \\approx ${area_fixed} \\text{ cm}^2$$</p>
+                    </div>
+                    <div style="background-color: #e6ffe6; padding: 10px; border: 1px solid #c0ffc0; border-radius: 5px; margin-top: 10px;">
+                        <h4>步驟二：計算水體積 ($V$)</h4>
+                        <p>體積公式: $V = A \\cdot L$</p>
+                        <p><strong>代入數值:</strong></p>
+                        <p>$$V = ${area_fixed} \\cdot ${L_fixed} \\approx ${volume_fixed} \\text{ cm³}$$</p>
+                    </div>`;
+                }
+
+                
+            }
+            return { volume: volume, steps: steps };
+        }
+        
+        /**
+         * 單位轉換函數 (保持不變)
+         */
+        function convertVolume(volumeCm3, unit) {
+            switch (unit) {
+                case 'cm3': return volumeCm3;
+                case 'm3': return volumeCm3 / 1000000;
+                case 'L': return volumeCm3 / 1000;
+                case 'kL': return volumeCm3 / 1000000;
+                default: return volumeCm3;
+            }
+        }
+        function convertWeight(volumeCm3, unit) {
+            const weightGrams = volumeCm3 * 1;
+            switch (unit) {
+                case 'g': return weightGrams;
+                case 'kg': return weightGrams / 1000;
+                case 't': return weightGrams / 1000000;
+                default: return weightGrams;
+            }
+        }
+        
+        /**
+         * 繪製水塔和水位的視覺化圖形 (工程圖風格 - 保持不變)
+         */
+        function drawTank(D, L_cm, h) {
+            const canvas = document.getElementById('tankCanvas');
+            const ctx = canvas.getContext('2d');
+            const W = canvas.width;
+            const H = canvas.height;
+            ctx.clearRect(0, 0, W, H);
+            
+            // --- 繪圖比例尺設定 ---
+            const maxL_px = W * 0.7;
+            const maxD_px = H * 0.6;
+            
+            const SCALE_FACTOR = Math.min(maxL_px / L_cm, maxD_px / D);
+
+            const Radius_px = D / 2 * SCALE_FACTOR; 
+            const Length_px = L_cm * SCALE_FACTOR; 
+            const h_px = h * SCALE_FACTOR; 
+            const R_out_px = Radius_px;
+
+            const startX = (W - Length_px) / 2;
+            const endX = startX + Length_px;
+            const centerY = H - R_out_px - 80; 
+
+            const tankTopY = centerY - R_out_px;
+            const tankBottomY = centerY + R_out_px;
+
+            // --- 繪製支架 ---
+            const standHeight = 40; 
+            const standY_top = tankBottomY;
+            const standY_bottom = standY_top + standHeight;
+
+            ctx.strokeStyle = '#000000'; 
+            ctx.lineWidth = 3;
+            ctx.lineJoin = 'round';
+            
+            ctx.beginPath();
+            ctx.moveTo(startX, standY_bottom);
+            ctx.lineTo(endX, standY_bottom);
+            ctx.stroke();
+            
+            const supportX_left = startX + Length_px * 0.15;
+            const supportX_right = endX - Length_px * 0.15;
+            
+            ctx.beginPath();
+            ctx.moveTo(supportX_left, standY_top);
+            ctx.lineTo(supportX_left, standY_bottom);
+            ctx.moveTo(supportX_right, standY_top);
+            ctx.lineTo(supportX_right, standY_bottom);
+            ctx.stroke();
+
+            // --- 繪製水塔本體框架 ---
+            ctx.strokeStyle = '#000000'; 
+            ctx.lineWidth = 3;
+            ctx.fillStyle = '#FFFFFF'; 
+
+            ctx.beginPath();
+            ctx.rect(startX, tankTopY, Length_px, 2 * R_out_px);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(startX, centerY, R_out_px, 0, 2 * Math.PI); 
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.arc(endX, centerY, R_out_px, 0, 2 * Math.PI); 
+            ctx.stroke();
+            
+            const capRadius = R_out_px * 0.15;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(startX + Length_px / 2, tankTopY, capRadius, 0, 2 * Math.PI);
+            ctx.stroke();
+            
+            // --- 繪製水 (水藍色填充) ---
+            if (h_px > 0) {
+                const waterLevelY = tankBottomY - h_px; 
+
+                ctx.fillStyle = 'rgba(0, 191, 255, 0.7)'; 
+                
+                const d_px = R_out_px - h_px; 
+                const halfChord = Math.sqrt(R_out_px * R_out_px - d_px * d_px); 
+                
+                // A. 繪製中間的矩形水體
+                ctx.beginPath();
+                ctx.rect(startX, waterLevelY, Length_px, h_px);
+                ctx.fill();
+                
+                // B. 繪製兩端的弓形水體 (圓形截面)
+                const angle = Math.acos(d_px / R_out_px); 
+                let startAngle = angle; 
+                let endAngle = 2 * Math.PI - angle; 
+                
+                // 左端弓形
+                ctx.beginPath();
+                ctx.moveTo(startX + halfChord, waterLevelY);
+                ctx.arc(startX, centerY, R_out_px, startAngle, endAngle, false); 
+                ctx.lineTo(startX - halfChord, waterLevelY);
+                ctx.closePath();
+                ctx.fill();
+                
+                // 右端弓形
+                ctx.beginPath();
+                ctx.moveTo(endX + halfChord, waterLevelY);
+                ctx.arc(endX, centerY, R_out_px, startAngle, endAngle, false);
+                ctx.lineTo(endX - halfChord, waterLevelY);
+                ctx.closePath();
+                ctx.fill();
+
+                // C. 繪製水面線 (強調)
+                ctx.strokeStyle = '#000080';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(startX, waterLevelY);
+                ctx.lineTo(endX, waterLevelY);
+                ctx.stroke();
+            }
+            
+            // --- 繪製標註線和尺寸 ---
+            ctx.fillStyle = '#333';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+
+            // 標示長度 L
+            const textY_L = tankTopY - 20;
+            ctx.fillText(`L = ${L_cm} cm`, startX + Length_px / 2, textY_L);
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(startX, textY_L - 5);
+            ctx.lineTo(endX, textY_L - 5);
+            ctx.stroke();
+
+            // 標示內徑 D' (在右側)
+            ctx.textAlign = 'left';
+            const textX_D = endX + 15;
+            ctx.fillText(`D' = ${D.toFixed(1)} cm`, textX_D, centerY + 5);
+            ctx.beginPath();
+            ctx.moveTo(textX_D - 5, tankTopY);
+            ctx.lineTo(textX_D - 5, tankBottomY);
+            ctx.stroke();
+
+            // 標示水位高度 h (在左側)
+            ctx.textAlign = 'right';
+            const textX_h = startX - 10;
+            const current_h = h > 0 ? h : 0; // 避免 h=0 時文字位置錯誤
+            ctx.fillText(`h = ${current_h} cm`, textX_h, tankBottomY - h_px / 2 + 5);
+            
+            // 虛線標示 h
+            ctx.strokeStyle = '#000080';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.setLineDash([5, 5]);
+            ctx.moveTo(startX, tankBottomY);
+            ctx.lineTo(startX, tankBottomY - h_px);
+            ctx.stroke();
+            ctx.setLineDash([]); 
+
+        }
+        
+        /**
+         * 執行計算並更新介面 
+         */
+        function calculateAndDraw() {
+            const outerD = parseFloat(document.getElementById('outerDiameter').value);
+            const thickness = parseFloat(document.getElementById('thickness').value);
+            const L = parseFloat(document.getElementById('length').value);
+            let h = parseFloat(document.getElementById('waterHeight').value);
+
+            const innerD = outerD - 2 * thickness;
+            const R = innerD / 2;
+            
+            if (R <= 0 || L <= 0) {
+                alert("錯誤：內徑必須大於 0。請檢查外徑和厚度。");
+                return;
+            }
+            
+            const maxH = innerD;
+            if (h > maxH) {
+                h = maxH;
+                document.getElementById('waterHeight').value = h;
+            }
+            
+            const result = calculateWaterVolume(R, h, L);
+            calculatedVolumeCm3 = result.volume;
+
+            // ------------------ 體積計算過程優化輸出 ------------------
+            const preCalculationHtml = `
+                <p><strong>輸入參數：</strong>外徑 $D = ${outerD} \text{ cm}$，厚度 $t = ${thickness} \text{ cm}$，長度 $L = ${L} \text{ cm}$，水位 $h = ${h} \text{ cm}$</p>
+                <div style="background-color: #f9f9f9; padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 15px;">
+                    <h4>📏 前置計算 (水塔內部尺寸)</h4>
+                    <p>內徑 $D' = D - 2t = ${outerD} - 2 \\times ${thickness} = ${innerD} \text{ cm}$</p>
+                    <p>內半徑 $R = D'/2 = ${R} \text{ cm}$</p>
+                </div>`;
+                
+            const resultsHtml = preCalculationHtml + result.steps;
+            document.getElementById('volumeCalculationSteps').innerHTML = resultsHtml;
+            // --------------------------------------------------------
+
+            updateResults();
+            drawTank(innerD, L, h); 
+            
+            MathJax.typesetPromise();
+        }
+
+        /**
+         * 根據選定的單位更新體積和重量的顯示值 
+         */
+        function updateResults() {
+            const volumeUnit = document.getElementById('volumeUnit').value;
+            const weightUnit = document.getElementById('weightUnit').value;
+
+            const displayV = convertVolume(calculatedVolumeCm3, volumeUnit);
+            document.getElementById('displayVolume').textContent = `${displayV.toFixed(3)} ${volumeUnit}`;
+
+            const displayW = convertWeight(calculatedVolumeCm3, weightUnit);
+            document.getElementById('displayWeight').textContent = `${displayW.toFixed(3)} ${weightUnit}`;
+        }
+
+        // 頁面載入完成後執行
+        window.onload = () => {
+             // 載入 MathJax 腳本用於渲染 LaTeX 公式
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+            script.async = true;
+            document.head.appendChild(script);
+
+            window.MathJax = {
+                tex: {
+                    inlineMath: [['$', '$'], ['\\(', '\\)']]
+                },
+                chtml: {
+                    scale: 0.9 
+                }
+            };
+            
+            calculateAndDraw();
+        };
+
+    </script>
+</body>
+</html>
